@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" id="themeColorMeta" content="#0A0A0A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AMGF Land">
+<link rel="apple-touch-icon" href="https://maryo53.github.io/teren-masurare/amgf-logo.png">
+<title>AMGF · Măsurare Teren</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+/* ── DARK MODE (default) ── */
+:root{
+  --gold:#D4A843;--gold-light:#F0C96A;--gold-dark:#9A7020;
+  --bg:#0A0A0A;--dark:#111;--panel:#141414;
+  --border:#2A2A2A;--text:#FFFFFF;--muted:#888;
+  --red:#FF5555;--green:#4DB88A;--blue:#5599FF;
+  --card:#1A1A1A;--input:#1E1E1E;
+}
+/* ── LIGHT MODE ── */
+body.light{
+  --bg:#F0EDE6;--dark:#FFFFFF;--panel:#F8F5F0;
+  --border:#D0C8BC;--text:#1A1A1A;--muted:#777;
+  --card:#FFFFFF;--input:#F0EDE6;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;overflow:hidden;font-size:16px;transition:background .3s,color .3s;}
+#app{display:flex;flex-direction:column;height:100%;}
+#app.fs #header,#app.fs #searchWrap,#app.fs #panel{display:none!important;}
+#app.fs #mapWrap{flex:1;}
+
+/* HEADER */
+#header{background:var(--dark);border-bottom:2px solid var(--gold-dark);padding:9px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:500;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-img{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--gold-dark);}
+.logo-name{font-size:20px;font-weight:700;color:var(--gold);letter-spacing:2px;}
+.logo-sub{font-size:10px;color:var(--muted);letter-spacing:1px;font-family:'Share Tech Mono',monospace;}
+.header-right{display:flex;align-items:center;gap:10px;}
+.gps-badge{display:flex;align-items:center;gap:6px;font-size:12px;font-family:'Share Tech Mono',monospace;color:var(--text);font-weight:600;}
+.gps-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);transition:background .3s;flex-shrink:0;}
+.gps-dot.on{background:var(--green);box-shadow:0 0 7px var(--green);animation:blink 1.4s infinite;}
+.gps-dot.err{background:var(--red);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+/* Day/Night toggle */
+#themeBtn{background:none;border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text);transition:all .2s;}
+#themeBtn:active{opacity:.7;}
+
+/* SEARCH */
+#searchWrap{background:var(--dark);border-bottom:1px solid var(--border);padding:8px 10px;display:flex;gap:7px;flex-shrink:0;z-index:490;}
+#searchInput{flex:1;background:var(--input);border:1px solid var(--border);border-radius:7px;padding:9px 13px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;outline:none;}
+#searchInput::placeholder{color:var(--muted);}
+#searchInput:focus{border-color:var(--gold-dark);}
+#searchBtn{background:var(--gold);border:none;border-radius:7px;padding:9px 15px;color:#000;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:1px;white-space:nowrap;}
+
+/* MAP */
+#mapWrap{position:relative;flex:1;min-height:0;}
+#map{width:100%;height:100%;}
+.leaflet-control-zoom{display:none!important;}
+#searchResults{position:absolute;top:0;left:0;right:0;background:var(--card);border:1px solid var(--gold-dark);border-top:none;border-radius:0 0 10px 10px;z-index:800;max-height:240px;overflow-y:auto;display:none;box-shadow:0 8px 20px rgba(0,0,0,.8);}
+.sr-item{padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;line-height:1.4;}
+.sr-item:active{background:var(--input);}
+.sr-name{font-size:15px;font-weight:700;color:var(--text);}
+.sr-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+
+/* MAP TOOLBAR */
+#mapToolbar{position:absolute;bottom:0;left:0;right:0;z-index:400;background:rgba(10,10,10,0.93);border-top:1px solid var(--border);display:flex;align-items:center;padding:7px 8px;gap:5px;}
+body.light #mapToolbar{background:rgba(240,237,230,0.95);}
+.mt-btn{flex:1;background:var(--card);border:1px solid var(--border);color:var(--gold);font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;padding:8px 2px;border-radius:7px;cursor:pointer;text-align:center;letter-spacing:.5px;text-transform:uppercase;line-height:1.3;white-space:nowrap;}
+.mt-btn:active{opacity:.7;}
+.mt-btn.on{background:rgba(85,153,255,0.15);border-color:var(--blue);color:var(--blue);}
+.z-wrap{display:flex;flex-direction:column;gap:3px;flex-shrink:0;}
+.z-btn{width:35px;height:29px;background:var(--card);border:1px solid var(--border);color:var(--gold);font-size:20px;font-weight:700;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+/* COLOR MENU */
+#colorMenu{position:absolute;bottom:62px;left:8px;z-index:500;background:var(--card);border:1px solid var(--gold-dark);border-radius:10px;padding:14px;display:none;box-shadow:0 -8px 24px rgba(0,0,0,.8);}
+#colorMenu.show{display:block;}
+.cm-title{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-family:'Share Tech Mono',monospace;margin-bottom:10px;}
+.cm-row{display:flex;gap:10px;flex-wrap:wrap;max-width:260px;}
+.cm-item{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.cm-dot{width:32px;height:32px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:transform .15s;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.cm-dot.active{border-color:var(--text);transform:scale(1.15);}
+.cm-lbl{font-size:9px;color:var(--muted);font-family:'Rajdhani',sans-serif;}
+
+/* TRACKING / CADASTRU badges */
+#trackingBadge,#cadastruInfo{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:400;border-radius:8px;display:none;}
+#trackingBadge{background:rgba(77,184,138,0.92);color:#000;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;padding:6px 16px;white-space:nowrap;animation:blink 1.4s infinite;}
+#cadastruInfo{background:rgba(10,10,10,0.96);border:1px solid var(--blue);padding:12px 16px;max-width:290px;width:92%;font-size:12px;font-family:'Share Tech Mono',monospace;color:var(--text);}
+body.light #cadastruInfo{background:rgba(255,255,255,0.97);}
+#cadastruInfo .ci-title{color:var(--blue);font-weight:700;font-size:13px;margin-bottom:7px;display:flex;justify-content:space-between;}
+#cadastruInfo .ci-close{cursor:pointer;color:var(--muted);font-size:18px;}
+#btnFsExit{position:absolute;top:10px;right:10px;z-index:400;background:rgba(212,168,67,0.92);border:none;color:#000;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;padding:8px 12px;border-radius:7px;cursor:pointer;display:none;}
+
+/* PANEL */
+#panel{flex-shrink:0;background:var(--panel);border-top:2px solid var(--gold-dark);z-index:400;display:flex;flex-direction:column;max-height:54vh;overflow:hidden;}
+#tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tab{flex:1;padding:10px 4px;text-align:center;font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .2s;text-transform:uppercase;}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+.tab-content{display:none;flex:1;overflow:hidden;flex-direction:column;min-height:0;}
+.tab-content.active{display:flex;}
+
+/* STATS */
+#stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);flex-shrink:0;}
+.stat{background:var(--dark);padding:10px 4px;text-align:center;}
+.stat-lbl{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-family:'Share Tech Mono',monospace;margin-bottom:3px;}
+.stat-val{font-size:16px;font-weight:700;color:var(--text);font-family:'Share Tech Mono',monospace;line-height:1;white-space:nowrap;}
+.u{font-size:9px;color:var(--gold);}
+
+/* BUTTONS */
+#btns{padding:8px 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;flex-shrink:0;border-bottom:1px solid var(--border);}
+#btns2{padding:0 10px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;flex-shrink:0;border-bottom:1px solid var(--border);}
+.btn{padding:11px 4px;border-radius:7px;border:none;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-align:center;text-transform:uppercase;transition:all .15s;line-height:1.3;}
+#btnGps{background:var(--gold);color:#000;}
+#btnGps.active{background:#162616;color:var(--green);border:1px solid var(--green);}
+#btnAdd{background:var(--card);color:var(--text);border:1px solid var(--border);opacity:.35;pointer-events:none;}
+#btnAdd.ready{opacity:1;pointer-events:auto;border-color:var(--green);color:var(--green);}
+#btnUndo{background:var(--card);color:var(--text);border:1px solid var(--border);}
+#btnClear{background:var(--card);color:var(--red);border:1px solid #3A1010;}
+#btnTrack{background:var(--card);color:var(--blue);border:1px solid #1A2A4A;}
+#btnTrack.active{background:#1A2A3A;color:var(--blue);border-color:var(--blue);}
+#btnSave{background:var(--card);color:var(--gold);border:1px solid var(--gold-dark);}
+#btnExportImg{background:var(--card);color:var(--text);border:1px solid var(--border);}
+#btnExportKml{background:var(--card);color:var(--green);border:1px solid #1A3A2A;}
+
+/* LIST */
+#listWrap{flex:1;overflow-y:auto;padding:9px 10px;min-height:0;}
+#listWrap::-webkit-scrollbar{width:3px;}
+#listWrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.pt-item{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:9px 11px;margin-bottom:5px;animation:fi .2s ease;}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.pt-num{width:26px;height:26px;border-radius:50%;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.pt-info{flex:1;min-width:0;}
+.pt-coords{font-size:11px;font-family:'Share Tech Mono',monospace;color:var(--text);line-height:1.5;font-weight:600;}
+.pt-meta{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;}
+.pt-gps{color:var(--green);}
+.pt-del{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;}
+.empty{text-align:center;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:13px;padding:18px 10px;line-height:2;}
+
+/* DETAILS */
+#detailWrap{flex:1;overflow-y:auto;padding:10px;min-height:0;}
+.detail-row{display:flex;justify-content:space-between;align-items:center;padding:8px 11px;background:var(--card);border:1px solid var(--border);border-radius:7px;margin-bottom:5px;}
+.detail-lbl{font-size:12px;color:var(--muted);font-family:'Share Tech Mono',monospace;}
+.detail-val{font-size:13px;font-weight:700;color:var(--text);font-family:'Share Tech Mono',monospace;text-align:right;max-width:55%;}
+.detail-section{font-size:11px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;font-family:'Share Tech Mono',monospace;padding:9px 2px 4px;}
+
+/* FAVORITES */
+#favWrap{flex:1;overflow-y:auto;padding:9px 10px;min-height:0;}
+.fav-item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px;}
+.fav-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.fav-name{font-size:15px;font-weight:700;}
+.fav-actions{display:flex;gap:5px;}
+.fav-btn{background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:12px;font-weight:700;padding:4px 9px;cursor:pointer;font-family:'Rajdhani',sans-serif;}
+.fav-btn.load{color:var(--green);border-color:var(--green);}
+.fav-btn.del{color:var(--red);border-color:#3A1010;}
+.fav-stats{font-size:12px;font-family:'Share Tech Mono',monospace;color:var(--muted);line-height:1.8;}
+.fav-stats span{color:var(--text);}
+.fav-empty{text-align:center;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:13px;padding:30px 10px;line-height:2;}
+
+/* INSTALL BANNER */
+#installBanner{background:var(--gold);color:#000;padding:10px 14px;display:none;align-items:center;justify-content:space-between;flex-shrink:0;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;}
+#installBanner.show{display:flex;}
+#installBtn{background:#000;color:var(--gold);border:none;border-radius:6px;padding:7px 14px;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;cursor:pointer;}
+#installClose{background:none;border:none;font-size:18px;cursor:pointer;color:#000;margin-left:8px;}
+
+/* MODAL */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:none;align-items:center;justify-content:center;}
+#modal.show{display:flex;}
+.modal-box{background:var(--card);border:1px solid var(--gold-dark);border-radius:12px;padding:22px;width:290px;max-width:92vw;}
+.modal-title{font-size:17px;font-weight:700;color:var(--gold);margin-bottom:14px;text-align:center;}
+.modal-input{width:100%;background:var(--input);border:1px solid var(--border);border-radius:7px;padding:11px 13px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;outline:none;margin-bottom:12px;}
+.modal-btns{display:flex;gap:8px;}
+.modal-btn{flex:1;padding:11px;border-radius:7px;border:none;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-transform:uppercase;}
+.modal-btn.confirm{background:var(--gold);color:#000;}
+.modal-btn.cancel{background:var(--input);color:var(--muted);}
+
+/* MARKERS */
+.mk{width:30px;height:30px;border:3px solid #000;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:'Rajdhani',sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.5);}
+.gm{width:16px;height:16px;background:var(--green);border:2px solid #fff;border-radius:50%;animation:ripple 1.5s infinite;}
+@keyframes ripple{0%{box-shadow:0 0 0 0 rgba(77,184,138,.5)}70%{box-shadow:0 0 0 10px rgba(77,184,138,0)}100%{box-shadow:0 0 0 0 rgba(77,184,138,0)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- INSTALL BANNER -->
+<div id="installBanner">
+  <span>📲 Instalează AMGF Land pe ecranul tău</span>
+  <div>
+    <button id="installBtn" onclick="installApp()">Instalează</button>
+    <button id="installClose" onclick="document.getElementById('installBanner').classList.remove('show')">✕</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div id="header">
+  <div class="logo">
+    <img class="logo-img" src="https://maryo53.github.io/teren-masurare/amgf-logo.png" alt="AMGF">
+    <div>
+      <div class="logo-name">AMGF</div>
+      <div class="logo-sub">LAND MEASURE PRO</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <button id="themeBtn" onclick="toggleTheme()">☀️</button>
+    <div class="gps-badge">
+      <div class="gps-dot" id="gpsDot"></div>
+      <span id="gpsLbl">GPS OFF</span>
+    </div>
+  </div>
+</div>
+
+<!-- SEARCH -->
+<div id="searchWrap">
+  <input id="searchInput" type="text" placeholder="🔍 Caută localitate, adresă..." autocomplete="off" onkeydown="if(event.key==='Enter')doSearch()">
+  <button id="searchBtn" onclick="doSearch()">CAUTĂ</button>
+</div>
+
+<!-- MAP -->
+<div id="mapWrap">
+  <div id="map"></div>
+  <div id="searchResults"></div>
+  <div id="trackingBadge">⏺ ÎNREGISTRARE TRASEU</div>
+  <div id="cadastruInfo">
+    <div class="ci-title">🏛 Cadastru ANCPI<span class="ci-close" onclick="document.getElementById('cadastruInfo').style.display='none'">✕</span></div>
+    <div id="ciContent"></div>
+  </div>
+  <button id="btnFsExit" onclick="exitFS()">✕ IEȘI</button>
+  <div id="colorMenu">
+    <div class="cm-title">Culoare poligon</div>
+    <div class="cm-row" id="cmRow"></div>
+  </div>
+  <div id="mapToolbar">
+    <div class="z-wrap">
+      <button class="z-btn" onclick="map.zoomIn()">+</button>
+      <button class="z-btn" onclick="map.zoomOut()">−</button>
+    </div>
+    <button class="mt-btn" id="btnLayer" onclick="cycleLayer()">🛰 SAT</button>
+    <button class="mt-btn" id="btnCadastru" onclick="toggleCadastru()">🏛 CAD</button>
+    <button class="mt-btn" onclick="openAncpi()">🌐 ANCPI</button>
+    <button class="mt-btn" id="btnColor" onclick="toggleColorMenu()">🎨</button>
+    <button class="mt-btn" onclick="goToMe()">📍 EU</button>
+    <button class="mt-btn" id="btnFs" onclick="enterFS()">⛶ FS</button>
+  </div>
+</div>
+
+<!-- PANEL -->
+<div id="panel">
+  <div id="tabs">
+    <div class="tab active" onclick="switchTab('measure')">📐 Măsură</div>
+    <div class="tab" onclick="switchTab('details')">📊 Detalii</div>
+    <div class="tab" onclick="switchTab('favs')">⭐ Favorite</div>
+  </div>
+  <div class="tab-content active" id="tabMeasure">
+    <div id="stats">
+      <div class="stat"><div class="stat-lbl">Suprafață</div><div class="stat-val" id="sArea">0<span class="u"> m²</span></div></div>
+      <div class="stat"><div class="stat-lbl">Hectare</div><div class="stat-val" id="sHa">0.000<span class="u"> ha</span></div></div>
+      <div class="stat"><div class="stat-lbl">Ari</div><div class="stat-val" id="sAri">0.00<span class="u"> ar</span></div></div>
+      <div class="stat"><div class="stat-lbl">Perimetru</div><div class="stat-val" id="sPerim">0<span class="u"> m</span></div></div>
+    </div>
+    <div id="btns">
+      <button class="btn" id="btnGps" onclick="toggleGPS()">📍<br>GPS</button>
+      <button class="btn" id="btnAdd" onclick="addGpsPoint()">➕<br>Adaugă</button>
+      <button class="btn" id="btnTrack" onclick="toggleTracking()">⏺<br>Traseu</button>
+      <button class="btn" id="btnUndo" onclick="undoLast()">↩<br>Undo</button>
+    </div>
+    <div id="btns2">
+      <button class="btn" id="btnSave" onclick="openSave()">⭐<br>Salvează</button>
+      <button class="btn" id="btnExportImg" onclick="exportImage()">🖼<br>Imagine</button>
+      <button class="btn" id="btnExportKml" onclick="exportKML()">📤<br>KML</button>
+      <button class="btn" id="btnClear" onclick="clearAll()">🗑<br>Reset</button>
+    </div>
+    <div id="listWrap">
+      <div class="empty" id="emptyMsg">📌 Click pe hartă sau activează GPS</div>
+      <div id="ptList"></div>
+    </div>
+  </div>
+  <div class="tab-content" id="tabDetails">
+    <div id="detailWrap">
+      <div class="empty" id="detailEmpty">Adaugă puncte pentru detalii</div>
+      <div id="detailContent"></div>
+    </div>
+  </div>
+  <div class="tab-content" id="tabFavs">
+    <div id="favWrap">
+      <div class="fav-empty" id="favEmpty">⭐ Nicio măsurătoare salvată</div>
+      <div id="favList"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="modal">
+  <div class="modal-box">
+    <div class="modal-title">⭐ Salvează Teren</div>
+    <input class="modal-input" id="saveName" placeholder="Nume teren (ex: Câmp Nord)" maxlength="40">
+    <div class="modal-btns">
+      <button class="modal-btn cancel" onclick="closeModal()">Anulează</button>
+      <button class="modal-btn confirm" onclick="confirmSave()">Salvează</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── THEME ─────────────────────────────────────────
+let isDark = true;
+function toggleTheme(){
+  isDark = !isDark;
+  document.body.classList.toggle('light', !isDark);
+  document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
+  document.getElementById('themeColorMeta').content = isDark ? '#0A0A0A' : '#F0EDE6';
+  localStorage.setItem('amgf_theme', isDark ? 'dark' : 'light');
+}
+// Load saved theme
+if(localStorage.getItem('amgf_theme') === 'light'){toggleTheme();}
+
+// ── PWA INSTALL ───────────────────────────────────
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').classList.add('show');
+});
+function installApp(){
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    document.getElementById('installBanner').classList.remove('show');
+  });
+}
+
+// ── COLORS ────────────────────────────────────────
+const colorOptions=[
+  {hex:'#D4A843',text:'#000',name:'Auriu'},
+  {hex:'#FF5555',text:'#FFF',name:'Roșu'},
+  {hex:'#4DB88A',text:'#000',name:'Verde'},
+  {hex:'#5599FF',text:'#FFF',name:'Albastru'},
+  {hex:'#FF8C00',text:'#000',name:'Portocaliu'},
+  {hex:'#CC44CC',text:'#FFF',name:'Violet'},
+  {hex:'#FFFFFF',text:'#000',name:'Alb'},
+];
+let polyColor=colorOptions[0].hex, markerTextColor=colorOptions[0].text;
+(function(){
+  const row=document.getElementById('cmRow');
+  row.innerHTML=colorOptions.map((c,i)=>`<div class="cm-item"><div class="cm-dot${i===0?' active':''}" style="background:${c.hex}" onclick="setColor('${c.hex}','${c.text}',this)">${i===0?'✓':''}</div><div class="cm-lbl">${c.name}</div></div>`).join('');
+})();
+function toggleColorMenu(){document.getElementById('colorMenu').classList.toggle('show');}
+function setColor(c,t,el){
+  polyColor=c;markerTextColor=t;
+  document.querySelectorAll('.cm-dot').forEach(d=>{d.classList.remove('active');d.textContent='';});
+  el.classList.add('active');el.textContent='✓';
+  redraw();mkrs.forEach((m,i)=>m.setIcon(mkIcon(i+1)));
+  document.getElementById('colorMenu').classList.remove('show');
+}
+function mkIcon(n){return L.divIcon({className:'',html:`<div class="mk" style="background:${polyColor};color:${markerTextColor}">${n}</div>`,iconSize:[30,30],iconAnchor:[15,15]});}
+
+// ── LAYERS ────────────────────────────────────────
+const layerDefs=[
+  {next:'⛰ TEREN', tile:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19})},
+  {next:'🗺 MAP',  tile:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,maxNativeZoom:17})},
+  {next:'🛰 SAT',  tile:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,maxNativeZoom:19})}
+];
+let curLayer=0;
+const map=L.map('map',{center:[45.9432,24.9668],zoom:7,zoomControl:false,attributionControl:false,layers:[layerDefs[0].tile]});
+document.getElementById('btnLayer').textContent=layerDefs[0].next;
+function cycleLayer(){
+  map.removeLayer(layerDefs[curLayer].tile);
+  curLayer=(curLayer+1)%layerDefs.length;
+  map.addLayer(layerDefs[curLayer].tile);
+  document.getElementById('btnLayer').textContent=layerDefs[curLayer].next;
+}
+
+// ── CADASTRU ──────────────────────────────────────
+let cadastruOn=false;
+const ancpiWMS=L.tileLayer.wms('https://geoportal.ancpi.ro/maps/inspection/wms',{layers:'CP.CadastralParcel',format:'image/png',transparent:true,version:'1.3.0',opacity:0.7,maxZoom:20});
+function toggleCadastru(){
+  const btn=document.getElementById('btnCadastru');
+  if(cadastruOn){map.removeLayer(ancpiWMS);cadastruOn=false;btn.classList.remove('on');btn.textContent='🏛 CAD';document.getElementById('cadastruInfo').style.display='none';}
+  else{map.addLayer(ancpiWMS);cadastruOn=true;btn.classList.add('on');btn.textContent='🏛 ON';showCadInfo('Layer cadastral ANCPI activ.<br>Zoom 14+ pentru parcele.<br><b style="color:var(--blue)">Click hartă</b> = info parcelă.');}
+}
+function showCadInfo(html){document.getElementById('ciContent').innerHTML=html;document.getElementById('cadastruInfo').style.display='block';}
+map.on('click',async function(e){
+  hideResults();document.getElementById('colorMenu').classList.remove('show');
+  if(cadastruOn){await queryCadastru(e);}
+  else{addPoint(e.latlng.lat,e.latlng.lng,'click');}
+});
+async function queryCadastru(e){
+  showCadInfo('⏳ Se încarcă...');
+  const pt=map.latLngToContainerPoint(e.latlng),sz=map.getSize(),b=map.getBounds();
+  const url=`https://geoportal.ancpi.ro/maps/inspection/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=CP.CadastralParcel&QUERY_LAYERS=CP.CadastralParcel&FORMAT=image/png&INFO_FORMAT=application/json&TRANSPARENT=true&CRS=CRS:84&BBOX=${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}&WIDTH=${sz.x}&HEIGHT=${sz.y}&I=${Math.round(pt.x)}&J=${Math.round(pt.y)}`;
+  try{
+    const r=await fetch(url);const data=await r.json();
+    if(data.features&&data.features.length>0){
+      const f=data.features[0].properties;let html='';
+      if(f.label||f.CADNUM)html+=`<b>Nr. parcelă:</b> ${f.label||f.CADNUM}<br>`;
+      if(f.areaValue)html+=`<b>Suprafață:</b> ${f.areaValue} m²<br>`;
+      if(f.nationalCadastralReference)html+=`<b>Ref.:</b> ${f.nationalCadastralReference}<br>`;
+      showCadInfo(html||'Parcelă găsită, detalii indisponibile.');
+    }else{showCadInfo('Nicio parcelă.<br><small style="color:var(--muted)">Încearcă zoom 14+.</small>');}
+  }catch(err){showCadInfo(`WMS indisponibil.<br><a href="#" onclick="openAncpiAt(${e.latlng.lat},${e.latlng.lng})" style="color:var(--blue)">→ Deschide ANCPI Geoportal</a>`);}
+}
+function openAncpi(){const c=map.getCenter();window.open(`https://geoportal.ancpi.ro/geoportal/viewer/index.html?x=${c.lng}&y=${c.lat}&zoom=${Math.max(map.getZoom(),14)}`,'_blank');}
+function openAncpiAt(lat,lng){window.open(`https://geoportal.ancpi.ro/geoportal/viewer/index.html?x=${lng}&y=${lat}&zoom=16`,'_blank');}
+
+// ── FULLSCREEN ────────────────────────────────────
+function enterFS(){document.getElementById('app').classList.add('fs');document.getElementById('btnFs').style.display='none';document.getElementById('btnFsExit').style.display='block';setTimeout(()=>map.invalidateSize(),150);}
+function exitFS(){document.getElementById('app').classList.remove('fs');document.getElementById('btnFs').style.display='block';document.getElementById('btnFsExit').style.display='none';setTimeout(()=>map.invalidateSize(),150);}
+
+// ── TABS ──────────────────────────────────────────
+function switchTab(name){
+  ['measure','details','favs'].forEach((n,i)=>{
+    document.querySelectorAll('.tab')[i].classList.toggle('active',n===name);
+    document.getElementById('tab'+n.charAt(0).toUpperCase()+n.slice(1)).classList.toggle('active',n===name);
+  });
+  if(name==='details')renderDetails();
+  if(name==='favs')renderFavs();
+}
+
+// ── STATE ─────────────────────────────────────────
+let pts=[],mkrs=[],poly=null,pline=null;
+let gpsOn=false,gpsWatchId=null,gpsMk=null,gpsPos=null;
+let tracking=false,trackPolyline=null,trackPts=[];
+
+// ── SEARCH ────────────────────────────────────────
+let sT=null;
+document.getElementById('searchInput').addEventListener('input',function(){clearTimeout(sT);const q=this.value.trim();if(q.length<3){hideResults();return;}sT=setTimeout(()=>liveSearch(q),400);});
+document.addEventListener('click',function(e){if(!e.target.closest('#searchWrap')&&!e.target.closest('#searchResults'))hideResults();if(!e.target.closest('#colorMenu')&&!e.target.closest('#btnColor'))document.getElementById('colorMenu').classList.remove('show');});
+async function liveSearch(q){try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=1`,{headers:{'Accept-Language':'ro,en'}});showResults(await r.json());}catch(e){hideResults();}}
+async function doSearch(){const q=document.getElementById('searchInput').value.trim();if(q)await liveSearch(q);}
+function showResults(data){const box=document.getElementById('searchResults');if(!data||!data.length){box.innerHTML='<div class="sr-item"><div class="sr-name" style="color:var(--muted)">Niciun rezultat</div></div>';box.style.display='block';return;}box.innerHTML=data.map(r=>`<div class="sr-item" onclick="selectResult(${r.lat},${r.lon},'${escQ(r.display_name)}')"><div class="sr-name">${r.display_name.split(',').slice(0,2).join(',').trim()}</div><div class="sr-sub">${shortAddr(r)}</div></div>`).join('');box.style.display='block';}
+function hideResults(){document.getElementById('searchResults').style.display='none';}
+function escQ(s){return s.replace(/'/g,"\'").replace(/"/g,'&quot;');}
+function shortAddr(r){const a=r.address||{};return[a.county||a.state_district,a.state,a.country].filter(Boolean).slice(0,3).join(', ');}
+function selectResult(lat,lon,name){hideResults();document.getElementById('searchInput').value=name.split(',')[0].trim();map.setView([parseFloat(lat),parseFloat(lon)],15);}
+
+// ── GPS ───────────────────────────────────────────
+function toggleGPS(){gpsOn?stopGPS():startGPS();}
+function startGPS(){
+  if(!navigator.geolocation){alert('Geolocation nu e disponibil.');return;}
+  gpsOn=true;const b=document.getElementById('btnGps');
+  b.classList.add('active');b.innerHTML='⏹<br>Stop';
+  document.getElementById('gpsDot').className='gps-dot on';
+  document.getElementById('gpsLbl').textContent='GPS ON';
+  gpsWatchId=navigator.geolocation.watchPosition(
+    pos=>{gpsPos={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy};updateGpsMk(gpsPos.lat,gpsPos.lng);document.getElementById('btnAdd').classList.add('ready');document.getElementById('gpsLbl').textContent=`±${Math.round(gpsPos.acc)}m`;if(tracking)addTrackPoint(gpsPos.lat,gpsPos.lng);},
+    err=>{document.getElementById('gpsDot').className='gps-dot err';document.getElementById('gpsLbl').textContent={1:'Refuzat',2:'Indisponibil',3:'Timeout'}[err.code]||'ERR';},
+    {enableHighAccuracy:true,maximumAge:2000,timeout:15000}
+  );
+}
+function stopGPS(){gpsOn=false;if(gpsWatchId)navigator.geolocation.clearWatch(gpsWatchId);if(gpsMk){map.removeLayer(gpsMk);gpsMk=null;}if(tracking)stopTracking();const b=document.getElementById('btnGps');b.classList.remove('active');b.innerHTML='📍<br>GPS';document.getElementById('btnAdd').classList.remove('ready');document.getElementById('gpsDot').className='gps-dot';document.getElementById('gpsLbl').textContent='GPS OFF';}
+function updateGpsMk(lat,lng){const icon=L.divIcon({className:'',html:'<div class="gm"></div>',iconSize:[16,16],iconAnchor:[8,8]});if(gpsMk)gpsMk.setLatLng([lat,lng]);else{gpsMk=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map);map.setView([lat,lng],17);}}
+function goToMe(){if(gpsPos){map.setView([gpsPos.lat,gpsPos.lng],17);return;}navigator.geolocation&&navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>alert('Activează GPS-ul mai întâi.'));}
+function addGpsPoint(){if(!gpsPos){alert('Așteptând semnal GPS...');return;}if(navigator.vibrate)navigator.vibrate(60);addPoint(gpsPos.lat,gpsPos.lng,'gps');map.panTo([gpsPos.lat,gpsPos.lng]);}
+
+// ── TRACKING ──────────────────────────────────────
+function toggleTracking(){if(!gpsOn){alert('Pornește GPS-ul mai întâi.');return;}tracking?stopTracking():startTracking();}
+function startTracking(){tracking=true;trackPts=[];if(trackPolyline){map.removeLayer(trackPolyline);trackPolyline=null;}document.getElementById('btnTrack').classList.add('active');document.getElementById('btnTrack').innerHTML='⏹<br>Stop';document.getElementById('trackingBadge').style.display='block';}
+function stopTracking(){tracking=false;document.getElementById('btnTrack').classList.remove('active');document.getElementById('btnTrack').innerHTML='⏺<br>Traseu';document.getElementById('trackingBadge').style.display='none';if(trackPts.length>2&&confirm(`Traseu: ${trackPts.length} puncte.\nConvertești în poligon?`)){mkrs.forEach(m=>map.removeLayer(m));pts=[];mkrs=[];if(poly){map.removeLayer(poly);poly=null;}if(pline){map.removeLayer(pline);pline=null;}const step=Math.max(1,Math.floor(trackPts.length/20));for(let i=0;i<trackPts.length;i+=step)addPoint(trackPts[i].lat,trackPts[i].lng,'track');}if(trackPolyline){map.removeLayer(trackPolyline);trackPolyline=null;}trackPts=[];}
+function addTrackPoint(lat,lng){trackPts.push({lat,lng});const ll=trackPts.map(p=>[p.lat,p.lng]);if(trackPolyline)trackPolyline.setLatLngs(ll);else trackPolyline=L.polyline(ll,{color:polyColor,weight:3,opacity:.7}).addTo(map);}
+
+// ── ADD POINT ─────────────────────────────────────
+function addPoint(lat,lng,src){pts.push({lat,lng,src});const mk=L.marker([lat,lng],{icon:mkIcon(pts.length)}).addTo(map);mkrs.push(mk);redraw();calcStats();renderList();}
+function redraw(){if(poly){map.removeLayer(poly);poly=null;}if(pline){map.removeLayer(pline);pline=null;}if(pts.length<2)return;const ll=pts.map(p=>[p.lat,p.lng]);if(pts.length>=3)poly=L.polygon(ll,{color:polyColor,fillColor:polyColor,fillOpacity:.15,weight:2.5,dashArray:'8,4'}).addTo(map);else pline=L.polyline(ll,{color:polyColor,weight:2.5,dashArray:'8,4'}).addTo(map);}
+
+// ── CALC ──────────────────────────────────────────
+function shoelace(p){if(p.length<3)return 0;const R=6371000;let a=0;for(let i=0;i<p.length;i++){const j=(i+1)%p.length;const xi=p[i].lng*Math.PI/180*R*Math.cos(p[i].lat*Math.PI/180);const yi=p[i].lat*Math.PI/180*R;const xj=p[j].lng*Math.PI/180*R*Math.cos(p[j].lat*Math.PI/180);const yj=p[j].lat*Math.PI/180*R;a+=xi*yj-xj*yi;}return Math.abs(a/2);}
+function hav(a,b,c,d){const R=6371000,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/180;const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dN/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function perimCalc(p){if(p.length<2)return 0;let s=0;for(let i=0;i<p.length;i++)s+=hav(p[i].lat,p[i].lng,p[(i+1)%p.length].lat,p[(i+1)%p.length].lng);return s;}
+function azimuth(la1,lo1,la2,lo2){const dL=(lo2-lo1)*Math.PI/180,a1=la1*Math.PI/180,a2=la2*Math.PI/180;return((Math.atan2(Math.sin(dL)*Math.cos(a2),Math.cos(a1)*Math.sin(a2)-Math.sin(a1)*Math.cos(a2)*Math.cos(dL))*180/Math.PI)+360)%360;}
+function wgs84toStereo70(lat,lon){const a=6378245.0,f=1/298.3,e2=2*f-f*f,e=Math.sqrt(e2);const lat0=46*Math.PI/180,lon0=25*Math.PI/180,k0=0.9998,FE=500000,FN=500000;const latR=lat*Math.PI/180,lonR=lon*Math.PI/180;const N0=a/Math.sqrt(1-e2*Math.sin(lat0)**2);const t=Math.tan(Math.PI/4-latR/2)/Math.pow((1-e*Math.sin(latR))/(1+e*Math.sin(latR)),e/2);const t0=Math.tan(Math.PI/4-lat0/2)/Math.pow((1-e*Math.sin(lat0))/(1+e*Math.sin(lat0)),e/2);const rho=2*k0*N0*t/Math.sqrt(1+t*t),rho0=2*k0*N0*t0/Math.sqrt(1+t0*t0);const dL=lonR-lon0;return{E:Math.round((FE+rho*Math.sin(dL))*100)/100,N:Math.round((FN+rho0-rho*Math.cos(dL))*100)/100};}
+function fmtArea(a){return a>=10000?`${(a/10000).toFixed(3)}<span class="u"> ha</span>`:`${a.toFixed(0)}<span class="u"> m²</span>`;}
+function fmtDist(v){return v>=1000?`${(v/1000).toFixed(3)}<span class="u"> km</span>`:`${v.toFixed(1)}<span class="u"> m</span>`;}
+function calcStats(){const a=shoelace(pts),p=perimCalc(pts);document.getElementById('sArea').innerHTML=fmtArea(a);document.getElementById('sHa').innerHTML=`${(a/10000).toFixed(4)}<span class="u"> ha</span>`;document.getElementById('sAri').innerHTML=`${(a/100).toFixed(2)}<span class="u"> ar</span>`;document.getElementById('sPerim').innerHTML=fmtDist(p);}
+function renderList(){document.getElementById('emptyMsg').style.display=pts.length?'none':'block';document.getElementById('ptList').innerHTML=pts.map((p,i)=>{const dist=i>0?hav(pts[i-1].lat,pts[i-1].lng,p.lat,p.lng):0;const az=i>0?azimuth(pts[i-1].lat,pts[i-1].lng,p.lat,p.lng):null;return`<div class="pt-item"><div class="pt-num" style="background:${polyColor};color:${markerTextColor}">${i+1}</div><div class="pt-info"><div class="pt-coords">${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}</div><div class="pt-meta">${p.src==='gps'?'<span class="pt-gps">● GPS</span> ':''} ${i>0?`↗ ${az.toFixed(1)}° ↔ ${dist.toFixed(1)}m`:'Start'}</div></div><button class="pt-del" onclick="delPt(${i})">×</button></div>`;}).join('');}
+function renderDetails(){const area=shoelace(pts),perim=perimCalc(pts);const el=document.getElementById('detailContent'),em=document.getElementById('detailEmpty');if(pts.length<2){em.style.display='block';el.innerHTML='';return;}em.style.display='none';let html=`<div class="detail-section">📐 Suprafață</div>`;html+=dRow('m²',area.toFixed(2));html+=dRow('Hectare (ha)',(area/10000).toFixed(4));html+=dRow('Ari (ar)',(area/100).toFixed(2));html+=`<div class="detail-section">📏 Distanțe</div>`;html+=dRow('Perimetru',perim>=1000?(perim/1000).toFixed(3)+' km':perim.toFixed(1)+' m');html+=dRow('Nr. puncte',pts.length);const cLat=pts.reduce((s,p)=>s+p.lat,0)/pts.length,cLng=pts.reduce((s,p)=>s+p.lng,0)/pts.length,s70c=wgs84toStereo70(cLat,cLng);html+=`<div class="detail-section">🌍 Centru teren</div>`;html+=dRow('Lat',cLat.toFixed(6)+'°');html+=dRow('Lon',cLng.toFixed(6)+'°');html+=dRow('Stereo70 E',s70c.E+' m');html+=dRow('Stereo70 N',s70c.N+' m');html+=`<div class="detail-section">📍 Stereo70 per punct</div>`;pts.forEach((p,i)=>{const s=wgs84toStereo70(p.lat,p.lng);html+=dRow(`Pt.${i+1}`,`E:${s.E} N:${s.N}`);});el.innerHTML=html;}
+function dRow(l,v){return`<div class="detail-row"><span class="detail-lbl">${l}</span><span class="detail-val">${v}</span></div>`;}
+function delPt(i){map.removeLayer(mkrs[i]);pts.splice(i,1);mkrs.splice(i,1);mkrs.forEach((m,j)=>m.setIcon(mkIcon(j+1)));redraw();calcStats();renderList();}
+function undoLast(){if(pts.length)delPt(pts.length-1);}
+function clearAll(){if(!pts.length)return;if(!confirm('Ștergi toate punctele?'))return;mkrs.forEach(m=>map.removeLayer(m));pts=[];mkrs=[];if(poly){map.removeLayer(poly);poly=null;}if(pline){map.removeLayer(pline);pline=null;}calcStats();renderList();}
+
+// ── EXPORT IMAGE ──────────────────────────────────
+function exportImage(){
+  if(pts.length<2){alert('Adaugă cel puțin 2 puncte.');return;}
+  const area=shoelace(pts),perim=perimCalc(pts);
+  const aStr=area>=10000?(area/10000).toFixed(3)+' ha':area.toFixed(0)+' m²';
+  const pStr=perim>=1000?(perim/1000).toFixed(3)+' km':perim.toFixed(0)+' m';
+  const canvas=document.createElement('canvas');canvas.width=800;canvas.height=Math.max(520,200+pts.length*22+80);
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#0A0A0A';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#111';ctx.fillRect(0,0,800,65);
+  // Load logo and draw
+  const logoImg = new Image();
+  logoImg.onload = function(){
+    ctx.drawImage(logoImg,12,8,48,48);
+    ctx.fillStyle=polyColor;ctx.font='bold 26px Arial';ctx.fillText('AMGF · LAND MEASURE PRO',70,38);
+    ctx.fillStyle='#888';ctx.font='12px monospace';ctx.fillText(new Date().toLocaleString('ro-RO'),560,38);
+    [['SUPRAFAȚĂ',aStr],['HECTARE',(area/10000).toFixed(4)+' ha'],['ARI',(area/100).toFixed(2)+' ar'],['PERIMETRU',pStr]].forEach((s,i)=>{const x=20+i*195;ctx.fillStyle='#161616';ctx.fillRect(x,78,185,68);ctx.strokeStyle=polyColor;ctx.lineWidth=1;ctx.strokeRect(x,78,185,68);ctx.fillStyle='#888';ctx.font='10px monospace';ctx.fillText(s[0],x+8,98);ctx.fillStyle='#FFF';ctx.font='bold 15px monospace';ctx.fillText(s[1],x+8,126);});
+    ctx.fillStyle=polyColor;ctx.font='bold 12px monospace';ctx.fillText('PUNCTE WGS84 / STEREO70:',20,173);
+    pts.forEach((p,i)=>{const s70=wgs84toStereo70(p.lat,p.lng);ctx.fillStyle='#FFF';ctx.font='11px monospace';ctx.fillText(`Pt.${i+1}: ${p.lat.toFixed(6)}° ${p.lng.toFixed(6)}°  |  E:${s70.E} N:${s70.N}`,20,190+i*22);});
+    const yF=canvas.height-30;ctx.fillStyle='#1A1A1A';ctx.fillRect(0,yF-15,800,45);ctx.fillStyle='#555';ctx.font='11px monospace';ctx.fillText('AMGF Land Measure Pro · amgf-finance.com',20,yF+10);ctx.fillStyle=polyColor;ctx.fillText('▲ AMGF TOKEN',660,yF+10);
+    const link=document.createElement('a');link.download=`teren-amgf-${Date.now()}.png`;link.href=canvas.toDataURL('image/png');link.click();
+  };
+  logoImg.src = 'https://maryo53.github.io/teren-masurare/amgf-logo.png';
+}
+
+// ── EXPORT KML ────────────────────────────────────
+function exportKML(){if(pts.length<2){alert('Adaugă cel puțin 2 puncte.');return;}const name=`Teren AMGF ${new Date().toLocaleDateString('ro')}`;const kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><n>${name}</n><Style id="s"><LineStyle><color>ff${polyColor.replace('#','').match(/../g).reverse().join('')}</color><width>3</width></LineStyle><PolyStyle><color>4d${polyColor.replace('#','').match(/../g).reverse().join('')}</color></PolyStyle></Style><Placemark><n>${name}</n><description>Suprafata: ${(shoelace(pts)/10000).toFixed(4)} ha</description><styleUrl>#s</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>${pts.map(p=>`${p.lng},${p.lat},0`).join('\n')}\n${pts[0].lng},${pts[0].lat},0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>${pts.map((p,i)=>`<Placemark><n>Punct ${i+1}</n><Point><coordinates>${p.lng},${p.lat},0</coordinates></Point></Placemark>`).join('')}</Document></kml>`;const link=document.createElement('a');link.download=`teren-amgf-${Date.now()}.kml`;link.href=URL.createObjectURL(new Blob([kml],{type:'application/vnd.google-earth.kml+xml'}));link.click();}
+
+// ── FAVORITES ─────────────────────────────────────
+function openSave(){if(pts.length<3){alert('Adaugă cel puțin 3 puncte.');return;}document.getElementById('saveName').value='';document.getElementById('modal').classList.add('show');setTimeout(()=>document.getElementById('saveName').focus(),100);}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+function confirmSave(){const name=document.getElementById('saveName').value.trim()||`Teren ${new Date().toLocaleDateString('ro')}`;const favs=loadFavs();favs.unshift({id:Date.now(),name,pts:[...pts],area:shoelace(pts),perim:perimCalc(pts),color:polyColor,date:new Date().toLocaleDateString('ro')});localStorage.setItem('amgf_favs',JSON.stringify(favs));closeModal();if(navigator.vibrate)navigator.vibrate([60,40,60]);alert(`✅ "${name}" salvat!`);}
+function loadFavs(){try{return JSON.parse(localStorage.getItem('amgf_favs'))||[];}catch{return[];}}
+function renderFavs(){const favs=loadFavs();document.getElementById('favEmpty').style.display=favs.length?'none':'block';document.getElementById('favList').innerHTML=favs.map(f=>`<div class="fav-item"><div class="fav-header"><div class="fav-name" style="color:${f.color||'var(--gold)'}">⭐ ${f.name}</div><div class="fav-actions"><button class="fav-btn load" onclick="loadFav(${f.id})">📍</button><button class="fav-btn del" onclick="deleteFav(${f.id})">🗑</button></div></div><div class="fav-stats">Suprafață: <span>${f.area>=10000?(f.area/10000).toFixed(3)+' ha':f.area.toFixed(0)+' m²'}</span> | Perimetru: <span>${f.perim>=1000?(f.perim/1000).toFixed(2)+' km':f.perim.toFixed(0)+' m'}</span><br>Puncte: <span>${f.pts.length}</span> | Data: <span>${f.date}</span></div></div>`).join('');}
+function loadFav(id){const f=loadFavs().find(x=>x.id===id);if(!f)return;mkrs.forEach(m=>map.removeLayer(m));pts=[];mkrs=[];if(poly){map.removeLayer(poly);poly=null;}if(pline){map.removeLayer(pline);pline=null;}if(f.color)polyColor=f.color;f.pts.forEach(p=>addPoint(p.lat,p.lng,p.src));if(pts.length)map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lng])),{padding:[30,30]});switchTab('measure');}
+function deleteFav(id){if(!confirm('Ștergi această măsurătoare?'))return;localStorage.setItem('amgf_favs',JSON.stringify(loadFavs().filter(f=>f.id!==id)));renderFavs();}
+
+// ── PWA MANIFEST (dynamic) ────────────────────────
+const manifest={name:'AMGF Land Measure',short_name:'AMGF Land',description:'Aplicatie profesionala de masurat terenuri',start_url:'./',display:'standalone',background_color:'#0A0A0A',theme_color:'#D4A843',orientation:'portrait',icons:[{src:'https://maryo53.github.io/teren-masurare/amgf-logo.png',sizes:'192x192',type:'image/png'},{src:'https://maryo53.github.io/teren-masurare/amgf-logo.png',sizes:'512x512',type:'image/png'}]};
+try{
+  const blob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+  const ml=document.getElementById('manifestLink');
+  if(ml){ml.href=URL.createObjectURL(blob);ml.rel='manifest';}
+}catch(e){console.log('Manifest:',e);}
+</script>
+</body>
+</html>
